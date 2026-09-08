@@ -298,7 +298,7 @@ function Enable-Updates {
 		"& $(ConvertTo-PowerShellLiteral $PSCommandPath) update *>> $(ConvertTo-PowerShellLiteral $UpdateLogFile)"
 	) -join '; '
 	$encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($commandText))
-	$action = New-ScheduledTaskAction -Execute $executable -Argument "-NoProfile -EncodedCommand $encodedCommand"
+	$action = New-ScheduledTaskAction -Execute $executable -Argument "-WindowStyle Hidden -NoProfile -NonInteractive -EncodedCommand $encodedCommand"
 	$firstRun = (Get-Date).Date.AddMinutes(17)
 	if ($firstRun -le (Get-Date)) { $firstRun = $firstRun.AddHours(1) }
 	$trigger = New-ScheduledTaskTrigger -Once -At $firstRun -RepetitionInterval (New-TimeSpan -Hours 1)
