@@ -1,5 +1,7 @@
 # orb-up
 
+> **Retired:** Amp runners now support built-in automatic updates that wait until idle, making this wrapper unnecessary. See [One Runner Is Now Enough](https://ampcode.com/news/one-runner-is-now-enough). Use `amp --no-tui` directly instead.
+
 A small Bash wrapper for running an [Amp](https://ampcode.com) runner in tmux, with automatic updates that wait until the runner is idle.
 
 ## Install
