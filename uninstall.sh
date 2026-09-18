@@ -24,5 +24,23 @@ fi
 
 rm -f "$install_directory/orb-up" "$plugin_directory/orb-up-idle.ts"
 
-printf 'orb-up is uninstalled. Amp, running sessions, and saved state/logs were left intact.\n'
-printf 'Stop the old runner when idle before starting a replacement with amp --no-tui.\n'
+session="${ORB_UP_SESSION:-amp-runner}"
+if command -v tmux >/dev/null 2>&1 && tmux has-session -t "=$session" 2>/dev/null; then
+	printf 'Runner session "%s" is still running. Only stop it if it is idle.\n' "$session"
+	reply=''
+	# stdin may contain this script (curl | bash), so ask on the controlling terminal.
+	if { exec 3<> /dev/tty; } 2>/dev/null; then
+		printf 'Stop this runner session now? [y/N] ' >&3
+		IFS= read -r reply <&3 || reply=''
+		exec 3>&-
+	fi
+	case "$reply" in
+		y | Y | yes | YES | Yes)
+			tmux kill-session -t "=$session"
+			printf 'Stopped runner session "%s".\n' "$session"
+			;;
+		*) printf 'Session "%s" was left running; stop it when idle before starting a replacement.\n' "$session" ;;
+	esac
+fi
+
+printf 'orb-up is uninstalled. Amp and saved state/logs were left intact.\n'

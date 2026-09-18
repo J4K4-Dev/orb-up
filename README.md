@@ -25,11 +25,11 @@ The installer:
 curl -fsSL https://raw.githubusercontent.com/J4K4-Dev/orb-up/main/uninstall.sh | bash
 ```
 
-This removes the wrapper, idle-tracking plugin, and orb-up update cron job. It keeps Amp, running tmux sessions, and saved state/logs. If `crontab` is unavailable, cron cleanup is skipped with a warning. You can safely run the script again.
+This removes the wrapper, idle-tracking plugin, and orb-up update cron job. It keeps Amp and saved state/logs. If the configured runner session is running, it asks whether to stop it; only confirm when the runner is idle. Declining, pressing Enter, or running without a terminal leaves the session intact. If `crontab` is unavailable, cron cleanup is skipped with a warning. You can safely run the script again.
 
 If you installed into custom directories, pass the same `ORB_UP_INSTALL_DIR` and `ORB_UP_PLUGIN_DIR` environment variables to `bash`.
 
-When the old runner is idle, stop its tmux session with `tmux kill-session -t amp-runner` (or your custom `ORB_UP_SESSION`) before starting a replacement with `amp --no-tui`.
+The session defaults to `amp-runner`; pass `ORB_UP_SESSION` to `bash` if you used a custom name. Other tmux sessions are not stopped.
 
 ## Start a runner
 

@@ -23,10 +23,21 @@ else
 	cat > "$CRON_FILE"
 fi
 EOF
-chmod +x "$TEMP/bin/crontab"
+cat > "$TEMP/bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$TMUX_LOG"
+case "$1" in
+	has-session) [[ "${SESSION_EXISTS:-0}" == 1 && "$3" == "=${ORB_UP_SESSION:-amp-runner}" ]] ;;
+	kill-session) ;;
+	*) exit 1 ;;
+esac
+EOF
+chmod +x "$TEMP/bin/crontab" "$TEMP/bin/tmux"
 export PATH="$TEMP/bin:$PATH"
 export HOME="$TEMP/home"
 export CRON_FILE="$TEMP/crontab"
+export TMUX_LOG="$TEMP/tmux.log"
 
 check_uninstall() {
 	local install_dir="$1" plugin_dir="$2"
@@ -69,3 +80,63 @@ fi
 [[ -f "$ORB_UP_INSTALL_DIR/orb-up" && -f "$ORB_UP_PLUGIN_DIR/orb-up-idle.ts" ]]
 grep -q 'nothing was removed' "$TEMP/failure-output"
 printf 'PASS: crontab errors leave installation intact\n'
+
+# Exercise a real controlling terminal with the script piped into Bash.
+python3 - "$ROOT/uninstall.sh" <<'PY'
+import errno
+import os
+import pty
+import select
+import subprocess
+import sys
+import time
+
+script = sys.argv[1]
+for answer in ('y', 'n', '', 'yes'):
+    os.environ['SESSION_EXISTS'] = '1'
+    os.environ['ORB_UP_SESSION'] = 'custom-runner' if answer == 'yes' else 'amp-runner'
+    open(os.environ['TMUX_LOG'], 'w').close()
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.execlp('bash', 'bash', '-c', 'cat "$1" | bash', 'test', script)
+    output = b''
+    replied = False
+    deadline = time.monotonic() + 10
+    try:
+        while True:
+            assert time.monotonic() < deadline, 'uninstall prompt timed out'
+            if not select.select([fd], [], [], 0.1)[0]:
+                continue
+            try:
+                chunk = os.read(fd, 4096)
+            except OSError as error:
+                if error.errno == errno.EIO:
+                    break
+                raise
+            if not chunk:
+                break
+            output += chunk
+            if b'[y/N]' in output and not replied:
+                os.write(fd, (answer + '\n').encode())
+                replied = True
+    finally:
+        os.close(fd)
+    _, status = os.waitpid(pid, 0)
+    assert status == 0 and replied, output
+    with open(os.environ['TMUX_LOG']) as log:
+        kills = [line.strip() for line in log if line.startswith('kill-session')]
+    expected = ['kill-session -t =' + os.environ['ORB_UP_SESSION']] if answer in ('y', 'yes') else []
+    assert kills == expected, (kills, expected)
+    assert (b'Stopped runner session' if expected else b'was left running') in output, output
+print('PASS: piped uninstall prompts on terminal; yes, no, Enter, and custom session')
+
+for exists in ('0', '1'):
+    os.environ['SESSION_EXISTS'] = exists
+    open(os.environ['TMUX_LOG'], 'w').close()
+    result = subprocess.run(['bash', script], input='', text=True, capture_output=True, start_new_session=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    with open(os.environ['TMUX_LOG']) as log:
+        assert 'kill-session' not in log.read()
+    assert ('was left running' in result.stdout) == (exists == '1'), result.stdout
+print('PASS: absent session and no-terminal uninstall never stop sessions')
+PY
